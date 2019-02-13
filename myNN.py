@@ -7,11 +7,17 @@ import copy
 
 class MYnn(object):
     def __init__(self, x, t, xho=None, tho=None, xts=None, tts=None):
-        self.x = np.vstack((x, np.ones(x.shape[1])))  # training data
+        self.x = np.vstack((x, np.ones(x.shape[1])))  # training data, bias added
         self.t = t              # training label
-        self.xho = np.vstack((xho, np.ones(xho.shape[1])))   # hold-out data
+        if xho is not None:
+            self.xho = np.vstack((xho, np.ones(xho.shape[1]))) 
+        else:
+            self.xho = None  # hold-out data
         self.tho = tho          # hold-out label
-        self.xts = np.vstack((xts, np.ones(xts.shape[1])))   # test data
+        if xts is not None :
+            self.xts = np.vstack((xts, np.ones(xts.shape[1]))) 
+        else:
+            self.xts = None  # test data
         self.tts = tts          # test label
         self.sigmoid = 'lr'     # sigmoid, default as logistic
         self.Wmat = []          # weight matrices, input -> output
@@ -145,8 +151,27 @@ class MYnn(object):
             print('sigmoid not supported')
             sys.exit(0)
         return par_z_ah
+
+    def test(self, test_input, path_weight=None):
+        # load weight from files
+        num_layer = len(self.Wmat)
+        self.Wmat = []
+        for i in range(num_layer):
+            if path_weight is not None:
+                file_name = path_weight+"layer"+str(i)+".npy"
+            else:
+                file_name = "layer"+str(i)+".npy"
+            # print("loading "+file_name)
+            self.Wmat.append(np.load(file_name))
+        # print(self.Wmat)
+        # perform test
+        y, _ = self.forward(test_input, copy.deepcopy(self.Wmat))
+        # get number
+        prob = np.max(y, axis=0)
+        val = np.equal(y, prob[None, :]).astype(float)
+        return prob, val
     
-    def fit(self, batch_size=128, eta=1e-5, annealing = True, shuffle=False, sigmoid='lr', lamb=0., momentum=False, max_epoch=5000):
+    def fit(self, batch_size=128, eta=1e-5, annealing=True, shuffle=False, sigmoid='lr', lamb=0., momentum=False, max_epoch=5000, save_weights=False):
         # set sigmoid
         self.sigmoid = sigmoid
         # check momentum
@@ -214,11 +239,22 @@ class MYnn(object):
                     self.append(copy.deepcopy(self.Wmat))
                 else:
                     print('#### Converged after {} epochs ####'.format(epoch))
-                    break
+                    if save_weights:
+                        print('#### Saving weights...')
+                        for layer_id, layer_W in enumerate(self.Wmat):
+                            file_name = "layer"+str(layer_id)+".npy"
+                            np.save(file_name, layer_W)
+                    break # break training loop
+
             # check maximum epoch number
             if epoch >= max_epoch:
                 print('#### Maximum training epochs reached ####')
-                break 
+                if save_weights:
+                    print('#### Saving weights...')
+                    for layer_id, layer_W in enumerate(self.Wmat):
+                        file_name = "layer"+str(layer_id)+".npy"
+                        np.save(file_name, layer_W)
+                break # break training loop
     
     def error(self, Y, T):
         # compute cross-entropy error on output and target
